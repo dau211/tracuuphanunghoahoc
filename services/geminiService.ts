@@ -1,7 +1,7 @@
 import { GoogleGenAI, Type, GenerateContentResponse } from "@google/genai";
 import { ReactionData } from '../types';
 
-const API_KEY = process.env.GEMINI_API_KEY;
+const API_KEY = process.env.API_KEY;
 
 if (!API_KEY) {
   throw new Error("API_KEY is not defined in environment variables");
@@ -45,6 +45,21 @@ const responseSchema = {
         },
         required: ["title"]
       }
+    },
+    imageData: {
+      type: Type.OBJECT,
+      description: "Nếu phản ứng có cấu trúc phức tạp (hữu cơ, ion phức), hãy tìm MỘT URL hình ảnh (.png, .jpg) công khai, trực tiếp và rõ ràng nhất. Nếu không, hãy bỏ qua trường này.",
+      properties: {
+        url: {
+          type: Type.STRING,
+          description: "URL trực tiếp đến file hình ảnh."
+        },
+        alt: {
+          type: Type.STRING,
+          description: "Mô tả ngắn gọn hình ảnh bằng tiếng Việt (VD: 'Công thức cấu tạo của ethanol')."
+        }
+      },
+      required: ["url", "alt"]
     }
   },
   required: ["reactionOccurs", "equation", "explanation", "isUserCorrect", "feedback", "videos"]
@@ -74,7 +89,15 @@ const runWithRetry = async <T>(operation: () => Promise<T>, retries = 3, backoff
 export const getReactionInfo = async (reactants: string, userProducts: string): Promise<ReactionData> => {
   const hasUserProducts = userProducts && userProducts.trim() !== '';
 
-  const prompt = `Bạn là hệ thống hỗ trợ Hóa học chuyên sâu dành cho học sinh THPT Việt Nam, tuân thủ tuyệt đối Chương trình Giáo dục Phổ thông 2018 (Sách: Cánh Diều, KNTT, CTST).
+  const prompt = `Bạn là hệ thống hỗ trợ Hóa học chuyên sâu dành cho học sinh THPT Việt Nam.
+
+**NGUỒN DỮ LIỆU BẮT BUỘC (TUYỆT ĐỐI TUÂN THỦ):**
+1. **NGUỒN VIETJACK LÀ SỐ 1:**
+   - Hệ thống **PHẢI** tìm kiếm và trích xuất nội dung (phương trình, điều kiện, hiện tượng, giải thích chi tiết) **Y NGUYÊN** từ kho dữ liệu của website **https://vietjack.com**.
+   - Nếu phản ứng có trên Vietjack, ưu tiên tuyệt đối cách diễn đạt và nội dung từ trang này.
+2. **NGUỒN DỰ PHÒNG:**
+   - Chỉ khi **TUYỆT ĐỐI KHÔNG TÌM THẤY** thông tin trên Vietjack, mới được phép tham khảo các nguồn khác.
+   - Các nguồn khác này bắt buộc phải nằm trong Sách Giáo Khoa Hóa học 10, 11, 12 theo **Chương trình GDPT 2018** (Bộ sách: Cánh Diều, Kết Nối Tri Thức, Chân Trời Sáng Tạo).
 
 **QUY TẮC NGÔN NGỮ "BẤT KHẢ XÂM PHẠM":**
 1. **TÊN CHẤT HÓA HỌC:**
@@ -86,18 +109,23 @@ export const getReactionInfo = async (reactants: string, userProducts: string): 
 
 **QUY TẮC XỬ LÝ PHẢN ỨNG (LOGIC HÓA HỌC):**
 1. **Phạm vi kiến thức:**
-   - Chỉ dùng kiến thức THPT (Lớp 10, 11, 12) CT GDPT 2018.
+   - Chỉ dùng kiến thức THPT (Lớp 10, 11, 12).
    - Không dùng kiến thức cũ (đơn vị atm cũ, khái niệm đã bỏ).
    - Không dùng kiến thức Đại học (cơ chế, lượng tử...).
 2. **Xử lý ĐIỀU KIỆN PHẢN ỨNG (Quan trọng):**
    - **Trường hợp 1:** Phản ứng chỉ có 1 hướng duy nhất hoặc không phụ thuộc điều kiện --> Trả về phương trình bình thường.
    - **Trường hợp 2:** Phản ứng phụ thuộc điều kiện (nhiệt độ, đặc/loãng, tỉ lệ mol...) VÀ người dùng **KHÔNG** ghi rõ điều kiện:
      - Tại trường \`equation\`: Trả về chuỗi "**Tùy thuộc vào điều kiện (xem chi tiết)**".
-     - Tại trường \`explanation\`: Bạn phải **LIỆT KÊ** các trường hợp có thể xảy ra trong chương trình THPT.
+     - Tại trường \`explanation\`: Bạn phải **LIỆT KÊ** các trường hợp có thể xảy ra.
      - *Ví dụ:* Fe + HNO3 (không nói rõ loãng/đặc):
        - TH1: HNO3 đặc, nóng -> Fe(NO3)3 + NO2 + H2O.
        - TH2: HNO3 loãng -> Fe(NO3)3 + NO + H2O.
    - **Trường hợp 3:** Người dùng đã ghi rõ điều kiện --> Trả về phương trình duy nhất đúng với điều kiện đó.
+3. **QUY TẮC VỀ HÌNH ẢNH (imageData):**
+   - **Xác định:** Nếu phản ứng có chứa hợp chất hữu cơ hoặc các ion phức tạp mà công thức cấu tạo giúp người học dễ hình dung (ví dụ: phản ứng este hóa, cracking, vòng benzene...), hãy thực hiện bước tiếp theo.
+   - **Tìm URL trực tiếp:** Cố gắng tìm một URL **TRỰC TIẾP** tới file hình ảnh (.png, .jpg, .gif) công khai và còn hoạt động. URL phải là link đến file ảnh, không phải link đến trang web chứa ảnh.
+   - **Nếu không tìm được:** Đối với các phản ứng vô cơ đơn giản (ví dụ: Fe + HCl) hoặc khi không tìm thấy URL ảnh đáng tin cậy, hãy **bỏ qua (không bao gồm)** trường \`imageData\` trong kết quả JSON.
+   - **Mô tả (alt):** Luôn cung cấp mô tả ngắn gọn bằng tiếng Việt cho hình ảnh.
 
 **Input:**
 - Chất tham gia (Đề bài): "${reactants}"

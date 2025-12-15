@@ -38,7 +38,7 @@ const ChemicalEquation: React.FC<{ equation: string }> = ({ equation }) => {
 
   return (
     <div 
-        className="text-xl font-mono bg-slate-900 p-4 rounded-md text-center text-yellow-300 border border-slate-700 tracking-wider" 
+        className="text-xl font-mono bg-slate-900 p-4 rounded-md text-center text-yellow-200 border border-slate-700 tracking-wider" 
         aria-label={`Phương trình hóa học: ${equation}`}
     >
       {equation.split(' ').map((part, index) => (
