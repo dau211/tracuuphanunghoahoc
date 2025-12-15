@@ -486,7 +486,6 @@ const App: React.FC = () => {
 
         <footer className="text-center text-slate-500 mt-12 py-4 border-t border-slate-800">
             <p>Phát triển bởi nhóm học sinh THPT Đào Duy Từ</p>
-            <p className="text-xs mt-1 text-slate-600">Ứng dụng tuân thủ chuẩn danh pháp IUPAC (Tiếng Anh) theo CT GDPT 2018</p>
         </footer>
       </div>
     </div>
