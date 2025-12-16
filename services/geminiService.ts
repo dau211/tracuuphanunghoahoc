@@ -1,7 +1,8 @@
-import { GoogleGenAI, Type, GenerateContentResponse } from "@google/genai";
-import { ReactionData } from '../types';
 
-const API_KEY = process.env.GEMINI_API_KEY;
+import { GoogleGenAI, Type, GenerateContentResponse } from "@google/genai";
+import { ReactionData, DictionaryData } from '../types';
+
+const API_KEY = process.env.API_KEY;
 
 if (!API_KEY) {
   throw new Error("API_KEY is not defined in environment variables");
@@ -63,6 +64,33 @@ const responseSchema = {
     }
   },
   required: ["reactionOccurs", "equation", "explanation", "isUserCorrect", "feedback", "videos"]
+};
+
+const dictionarySchema = {
+    type: Type.OBJECT,
+    properties: {
+        englishName: {
+            type: Type.STRING,
+            description: "Tên Tiếng Anh chuẩn IUPAC của chất."
+        },
+        ipa: {
+            type: Type.STRING,
+            description: "Phiên âm quốc tế (IPA) của tên Tiếng Anh."
+        },
+        vietnameseName: {
+            type: Type.STRING,
+            description: "Tên thường gọi trong Tiếng Việt."
+        },
+        description: {
+            type: Type.STRING,
+            description: "Mô tả ngắn gọn về tính chất, trạng thái hoặc ứng dụng (bằng Tiếng Việt)."
+        },
+        category: {
+            type: Type.STRING,
+            description: "Phân loại chất (VD: Oxit axit, Muối, Đơn chất kim loại...)."
+        }
+    },
+    required: ["englishName", "ipa", "vietnameseName", "description", "category"]
 };
 
 // Hàm hỗ trợ tự động thử lại khi gặp lỗi quá tải (429)
@@ -169,6 +197,39 @@ ${hasUserProducts ? `- Bài làm của user (Có thể là sản phẩm hoặc f
     }
     throw new Error("Không thể lấy dữ liệu từ Gemini. Vui lòng thử lại.");
   }
+};
+
+export const getChemicalEnglishInfo = async (formula: string): Promise<DictionaryData> => {
+    const prompt = `Cung cấp thông tin từ điển cho chất hóa học sau: "${formula}".
+    
+    Yêu cầu:
+    1. Tên Tiếng Anh phải chuẩn danh pháp IUPAC mới nhất (GDPT 2018).
+    2. Phiên âm IPA phải chính xác.
+    3. Tên Tiếng Việt là tên thường gọi.
+    `;
+
+    try {
+        const response = await runWithRetry<GenerateContentResponse>(() => ai.models.generateContent({
+            model: "gemini-2.5-flash",
+            contents: prompt,
+            config: {
+                responseMimeType: "application/json",
+                responseSchema: dictionarySchema,
+            }
+        }));
+
+        const text = response.text;
+        if (!text) throw new Error("Không nhận được dữ liệu từ điển.");
+        const data = JSON.parse(text);
+        return data as DictionaryData;
+
+    } catch (error: any) {
+        console.error("Lỗi từ điển:", error);
+         if (error.message && error.message.includes("Hệ thống đang quá tải")) {
+            throw error;
+        }
+        throw new Error("Không thể tra cứu từ điển.");
+    }
 };
 
 export const generatePracticeQuestion = async (): Promise<string> => {

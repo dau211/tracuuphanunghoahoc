@@ -1,12 +1,13 @@
+
 import React, { useState, useCallback, useEffect } from 'react';
-import { getReactionInfo, generatePracticeQuestion } from './services/geminiService';
-import { ReactionData } from './types';
+import { getReactionInfo, generatePracticeQuestion, getChemicalEnglishInfo } from './services/geminiService';
+import { ReactionData, DictionaryData } from './types';
 import Loader from './components/Loader';
-import { BeakerIcon, VideoIcon, SearchIcon, ClipboardCheckIcon, BrainIcon, PlusIcon, ImageIcon } from './components/icons';
+import { BeakerIcon, VideoIcon, SearchIcon, ClipboardCheckIcon, BrainIcon, PlusIcon, ImageIcon, BookIcon, SpeakerIcon } from './components/icons';
 import ChemicalEquation from './components/ChemicalEquation';
 import FormattedText from './components/FormattedText';
 
-type Tab = 'lookup' | 'check' | 'practice';
+type Tab = 'lookup' | 'check' | 'practice' | 'dictionary';
 
 const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<Tab>('lookup');
@@ -15,11 +16,13 @@ const App: React.FC = () => {
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<ReactionData | null>(null);
+  const [dictionaryResult, setDictionaryResult] = useState<DictionaryData | null>(null);
   const [lastReactants, setLastReactants] = useState<string>('');
 
   // Input State
   const [reactants, setReactants] = useState<string>('Fe + CuSO4');
   const [userProducts, setUserProducts] = useState<string>('FeSO4 + Cu');
+  const [dictionaryInput, setDictionaryInput] = useState<string>('H2SO4');
   
   // Practice Mode State
   const [practiceReactants, setPracticeReactants] = useState<string | null>(null);
@@ -31,10 +34,14 @@ const App: React.FC = () => {
     setActiveTab(tab);
     setError(null);
     setResult(null);
+    setDictionaryResult(null);
     // Reset inputs based on tab defaults
     if (tab === 'lookup' || tab === 'check') {
         setReactants('Fe + CuSO4');
         setUserProducts('FeSO4 + Cu');
+    }
+    if (tab === 'dictionary') {
+        setDictionaryInput('H2SO4');
     }
   };
 
@@ -80,6 +87,36 @@ const App: React.FC = () => {
       setLoading(false);
     }
   }, [reactants, userProducts]);
+
+  const handleDictionaryLookup = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!dictionaryInput.trim()) {
+        setError('Vui lòng nhập công thức hóa học.');
+        return;
+    }
+    setLoading(true);
+    setError(null);
+    setDictionaryResult(null);
+    
+    try {
+        const data = await getChemicalEnglishInfo(dictionaryInput);
+        setDictionaryResult(data);
+    } catch (err) {
+        setError(err instanceof Error ? err.message : 'Không thể tra cứu từ điển.');
+    } finally {
+        setLoading(false);
+    }
+  };
+
+  const speakEnglish = (text: string) => {
+      if ('speechSynthesis' in window) {
+          const utterance = new SpeechSynthesisUtterance(text);
+          utterance.lang = 'en-US';
+          window.speechSynthesis.speak(utterance);
+      } else {
+          alert("Trình duyệt của bạn không hỗ trợ đọc văn bản.");
+      }
+  };
 
   const handleNewQuestion = async () => {
     setLoading(true);
@@ -351,10 +388,10 @@ const App: React.FC = () => {
 
         <main>
           {/* Tabs Navigation */}
-          <div className="flex justify-center mb-8 border-b border-slate-700">
+          <div className="flex flex-wrap justify-center mb-8 border-b border-slate-700">
             <button
                 onClick={() => handleTabChange('lookup')}
-                className={`flex items-center gap-2 px-6 py-3 font-medium text-lg transition-all border-b-2 ${
+                className={`flex items-center gap-2 px-4 sm:px-6 py-3 font-medium text-base sm:text-lg transition-all border-b-2 ${
                     activeTab === 'lookup'
                     ? 'text-cyan-400 border-cyan-400'
                     : 'text-slate-400 border-transparent hover:text-slate-200 hover:border-slate-600'
@@ -365,7 +402,7 @@ const App: React.FC = () => {
             </button>
             <button
                 onClick={() => handleTabChange('check')}
-                className={`flex items-center gap-2 px-6 py-3 font-medium text-lg transition-all border-b-2 ${
+                className={`flex items-center gap-2 px-4 sm:px-6 py-3 font-medium text-base sm:text-lg transition-all border-b-2 ${
                     activeTab === 'check'
                     ? 'text-cyan-400 border-cyan-400'
                     : 'text-slate-400 border-transparent hover:text-slate-200 hover:border-slate-600'
@@ -376,7 +413,7 @@ const App: React.FC = () => {
             </button>
             <button
                 onClick={() => handleTabChange('practice')}
-                className={`flex items-center gap-2 px-6 py-3 font-medium text-lg transition-all border-b-2 ${
+                className={`flex items-center gap-2 px-4 sm:px-6 py-3 font-medium text-base sm:text-lg transition-all border-b-2 ${
                     activeTab === 'practice'
                     ? 'text-cyan-400 border-cyan-400'
                     : 'text-slate-400 border-transparent hover:text-slate-200 hover:border-slate-600'
@@ -384,6 +421,17 @@ const App: React.FC = () => {
             >
                 <BrainIcon className="w-5 h-5" />
                 Luyện tập
+            </button>
+            <button
+                onClick={() => handleTabChange('dictionary')}
+                className={`flex items-center gap-2 px-4 sm:px-6 py-3 font-medium text-base sm:text-lg transition-all border-b-2 ${
+                    activeTab === 'dictionary'
+                    ? 'text-cyan-400 border-cyan-400'
+                    : 'text-slate-400 border-transparent hover:text-slate-200 hover:border-slate-600'
+                }`}
+            >
+                <BookIcon className="w-5 h-5" />
+                Từ điển
             </button>
           </div>
 
@@ -560,19 +608,90 @@ const App: React.FC = () => {
                     )}
                 </div>
             )}
+            
+            {/* --- TAB 4: DICTIONARY --- */}
+            {activeTab === 'dictionary' && (
+                <form onSubmit={handleDictionaryLookup} className="space-y-6 animate-fade-in">
+                    <div className="text-center mb-4">
+                        <h2 className="text-xl font-semibold text-white">Từ điển hóa học</h2>
+                        <p className="text-sm text-slate-400">
+                            Tra cứu tên Tiếng Anh (IUPAC), phiên âm và nghe cách đọc chuẩn.
+                        </p>
+                    </div>
+                    <div className="flex flex-col items-center gap-2">
+                        <input
+                            type="text"
+                            value={dictionaryInput}
+                            onChange={(e) => setDictionaryInput(e.target.value)}
+                            placeholder="Nhập công thức (VD: H2SO4, Cu, KMnO4...)"
+                            className="w-full bg-slate-900 border-2 border-slate-600 rounded-lg py-3 px-4 text-lg text-slate-200 focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 focus:outline-none transition-colors duration-300 text-center"
+                        />
+                         {/* Live Preview */}
+                         <InputPreview text={dictionaryInput} />
+                    </div>
+                    <button
+                        type="submit"
+                        disabled={loading}
+                        className="w-full bg-gradient-to-r from-cyan-500 to-blue-600 text-white font-bold py-3 px-6 rounded-lg hover:from-cyan-600 hover:to-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 shadow-lg flex items-center justify-center gap-2"
+                    >
+                        {loading ? 'Đang tra cứu...' : <> <BookIcon className="w-5 h-5" /> Dịch sang Tiếng Anh </>}
+                    </button>
+                </form>
+            )}
 
           </div>
 
           {/* Results Section */}
-          <div className="mt-8 min-h-[100px] flex items-center justify-center">
+          <div className="mt-8 min-h-[100px] flex items-center justify-center w-full">
             {loading && <Loader />}
             {error && <p className="text-red-400 bg-red-500/10 p-4 rounded-md border border-red-500/30 w-full text-center">{error}</p>}
-            {!loading && result && <ResultDisplay result={result}/>}
+            
+            {!loading && activeTab !== 'dictionary' && result && <ResultDisplay result={result}/>}
+            
+            {!loading && activeTab === 'dictionary' && dictionaryResult && (
+                <div className="w-full bg-slate-800/50 p-6 rounded-xl border border-slate-700 shadow-lg animate-fade-in text-center">
+                    <div className="mb-4">
+                        <span className="inline-block px-3 py-1 rounded-full bg-slate-700 text-xs text-slate-300 uppercase tracking-wider mb-2">
+                            {dictionaryResult.category}
+                        </span>
+                        <h2 className="text-4xl font-bold text-cyan-400 mb-2">{dictionaryResult.englishName}</h2>
+                        <div className="flex items-center justify-center gap-3">
+                            <p className="text-xl text-slate-400 font-mono italic">/{dictionaryResult.ipa}/</p>
+                            <button 
+                                onClick={() => speakEnglish(dictionaryResult.englishName)}
+                                className="p-2 bg-slate-700 hover:bg-cyan-600 text-white rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-cyan-400"
+                                title="Nghe phát âm"
+                            >
+                                <SpeakerIcon className="w-5 h-5" />
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div className="border-t border-slate-700 pt-4 mt-4">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-left max-w-lg mx-auto">
+                            <div className="bg-slate-900/50 p-3 rounded border border-slate-700/50">
+                                <p className="text-xs text-slate-500 uppercase">Tên Tiếng Việt</p>
+                                <p className="text-lg font-semibold text-white">{dictionaryResult.vietnameseName}</p>
+                            </div>
+                            <div className="bg-slate-900/50 p-3 rounded border border-slate-700/50">
+                                <p className="text-xs text-slate-500 uppercase">Công thức</p>
+                                <div className="text-lg font-semibold text-white">{renderFormattedFormula(dictionaryInput)}</div>
+                            </div>
+                        </div>
+                        
+                        <div className="mt-4 bg-slate-900/50 p-4 rounded border border-slate-700/50 text-left">
+                            <p className="text-xs text-slate-500 uppercase mb-1">Mô tả</p>
+                            <p className="text-slate-300">{dictionaryResult.description}</p>
+                        </div>
+                    </div>
+                </div>
+            )}
           </div>
         </main>
 
         <footer className="text-center text-slate-500 mt-12 py-4 border-t border-slate-800">
             <p>Phát triển bởi nhóm học sinh THPT Đào Duy Từ</p>
+            
          </footer>
       </div>
     </div>

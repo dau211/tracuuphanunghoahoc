@@ -17,3 +17,11 @@ export interface ReactionData {
   videos: Video[];
   imageData?: ImageInfo | null;
 }
+
+export interface DictionaryData {
+  englishName: string;
+  ipa: string;
+  vietnameseName: string;
+  description: string;
+  category: string;
+}
