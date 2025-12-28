@@ -690,7 +690,7 @@ const App: React.FC = () => {
         </main>
 
         <footer className="text-center text-slate-500 mt-12 py-4 border-t border-slate-800">
-            <p>Phát triển bởi nhóm học sinh THPT Đào Duy Từ</p>
+            <p>Hóa học phổ thông</p>
             
          </footer>
       </div>
